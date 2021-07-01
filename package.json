@@ -1,0 +1,19 @@
+{
+  "name": "profitwell",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "axios": "^0.21.1",
+    "dotenv": "^10.0.0",
+    "exceljs": "^4.2.1",
+    "glob": "^7.1.7",
+    "glob-promise": "^4.2.0",
+    "node-xlsx": "^0.16.1"
+  }
+}
