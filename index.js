@@ -8,7 +8,8 @@ const PLANS_TO_SYNC = [
     "Advanced Round Robin Lead Assignment",
     "Notes Filter Extension",
     "Stale Lead Tracker",
-    "Twilio SMS Extension for Zoho CRM"
+    "Twilio SMS Extension for Zoho CRM",
+    "Smooth Messenger - Twilio SMS for Zoho CRM"
 ]
 
 const PROFITWELL_ADD_SUBSCRIPTION_ENDPOINT = 'https://api.profitwell.com/v2/subscriptions/'
@@ -39,18 +40,20 @@ async function pushDataToProfitWell() {
 
     await Promise.all(customers.slice(0).map(async (customer, customerIdx) => {
         if (!PLANS_TO_SYNC.includes(customer['Service'])) {
+            console.log('ignoring', customer['Service'])
             return
         }
 
         await new Promise((resolve) => {
-            setTimeout(resolve, customerIdx * 500)
+            setTimeout(resolve, customerIdx * 1000)
         })
+
         const [currency, amount] = customer['Renewal Amount'].split(' ')
         const renewalAmountCents = parseInt(amount, 10) * 100
         const dataForProfitwell = {
             "user_alias": customer['Profile Id'],
             "subscription_alias": customer['Custom Id'],
-            "email": customer['Profile Id'],
+            "email": customer['Custom Id'],
             "plan_id": customer['Service'],
             "plan_interval": customer['Payperiod'] === 'Yearly' ? 'Year' : 'Month',
             "value": renewalAmountCents,
@@ -86,7 +89,7 @@ async function pushDataToProfitWell() {
                     console.error('uh oh churn', CHURN_URL)
                     console.error(customer)
                     console.error(e.response.data)
-                    throw e
+                    // throw e
                 }
             }
         } else {
@@ -101,8 +104,8 @@ async function pushDataToProfitWell() {
                 if (!e.response?.data?.non_field_errors?.[0].includes('was not churned in the fi')) {
                     console.error('uh oh unchurn', UNCHURN_URL)
                     console.error(customer)
-                    console.error(e.response.data)
-                    throw e
+                    console.error(e.response?.data)
+                    // throw e
                 }
             }
         }
