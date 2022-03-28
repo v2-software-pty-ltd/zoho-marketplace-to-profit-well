@@ -9,7 +9,8 @@ const PLANS_TO_SYNC = [
     "Notes Filter Extension",
     "Stale Lead Tracker",
     "Twilio SMS Extension for Zoho CRM",
-    "Smooth Messenger - Twilio SMS for Zoho CRM"
+    "Smooth Messenger - Twilio SMS for Zoho CRM",
+    "Smooth Messenger - SMS for Zoho CRM"
 ]
 
 const PROFITWELL_ADD_SUBSCRIPTION_ENDPOINT = 'https://api.profitwell.com/v2/subscriptions/'
@@ -152,13 +153,63 @@ async function handleCancellation(customer, cancellations, attempts = 0) {
     }
 }
 
+async function updatePaidStatusInCrm(isPaid, crmOrgId, attempts) {
+    try {
+        const url = `https://www.zohoapis.com/crm/v2/functions/mark_user_as_paid/actions/execute?auth_type=apikey&zapikey=${process.env.Z_API_KEY}`;
+        const result = await axios.post(url, {
+            is_paid: isPaid,
+            org_id: crmOrgId
+        })
+    } catch (e) {
+        if(attempts < 5) {
+            await wait((attempts + 1) * 15)
+        }
+    }
+}
+
 async function pushDataToProfitWell() {
     const customers = await getCustomers()
     const cancellations = await getCancellations()
 
-    await Promise.all(customers.slice(0).map(async (customer, customerIdx) => {
+    console.log('all customers', customers.length)
+
+    const ignoredPlans = new Set()
+
+    const latestValidCustomerData = customers.reduce((uniqueCustomerIdMapping, customer) => {
         if (!PLANS_TO_SYNC.includes(customer['Service'])) {
-            console.log('ignoring', customer['Service'])
+            if (!ignoredPlans.has(customer['Service'])) {
+                ignoredPlans.add(customer['Service'])
+                console.log('ignoring', customer['Service'])
+            }
+            return uniqueCustomerIdMapping
+        }
+
+        customerId = customer['Custom Id']
+        const existingCustomerRecord = uniqueCustomerIdMapping[customerId]
+
+        if (existingCustomerRecord && existingCustomerRecord['Renewal Date'] > customer['Renewal Date']) {
+            return uniqueCustomerIdMapping
+        }
+
+        return {
+            ...uniqueCustomerIdMapping,
+            [customerId]: customer
+        }
+    }, {})
+
+    const validCustomers = Object.values(latestValidCustomerData)
+
+    const customersPerPlan = validCustomers.reduce((totals, customer) => {
+        const { Service } = customer
+        totals[Service] = (totals[Service] || 0) + 1
+        return totals
+    }, {})
+
+    console.log(validCustomers.length, 'customers to sync', customersPerPlan)
+
+    await Promise.all(validCustomers.map(async (customer, customerIdx) => {
+        if (!PLANS_TO_SYNC.includes(customer['Service'])) {
+            console.log('ignoring2', customer['Service'])
             return
         }
 
@@ -166,14 +217,18 @@ async function pushDataToProfitWell() {
 
         await createSubscription(customer)
 
+        let isPaid = true;
         if (customer['Status'] === 'Inactive') {
             await handleCancellation(customer, cancellations)
+            isPaid = false;
         } else {
             await unchurnCustomer(customer)
         }
 
+        await updatePaidStatusInCrm(isPaid, customer['Custom Id'])
+
         if (customerIdx % 10 === 0) {
-            console.log(`Done with ${customerIdx} of ${customers.length}`)
+            console.log(`Done with ${customerIdx} of ${validCustomers.length}`)
         }
     }))
 }
